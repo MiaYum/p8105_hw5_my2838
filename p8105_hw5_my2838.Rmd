@@ -15,9 +15,43 @@ homicide =
   read_csv("homicide-data.csv") |>
   mutate(city_state = paste(city, state, sep = ","))
 
-homicide |>
+homicide_city = 
+  homicide |>
   group_by(city_state, disposition) |>
   count(disposition) |>
-  rename(cases_num = n)
+  pivot_wider(
+    names_from = disposition,
+    values_from = n
+  ) |>
+  janitor::clean_names() |>
+  mutate_all(~replace_na(., 0)) |>
+  mutate(unsolved = closed_without_arrest + open_no_arrest,
+         sum = closed_without_arrest + open_no_arrest + closed_by_arrest) 
 
+```
+
+```{r}
+prop_bal = 
+  prop.test(
+  x = homicide_city$unsolved[homicide_city$city_state == "Baltimore,MD" ],
+  n = homicide_city$sum[homicide_city$city_state == "Baltimore,MD" ]
+  ) |>
+  broom::tidy() 
+
+prop_bal |>
+  knitr::kable()
+```
+
+So the estimate proportion of homicides that are unsolved in the city of Baltimore, MD is `r prop_bal$estimate`, and the confidence interval is [`r prop_bal$conf.low`, `r prop_bal$conf.high`].
+
+```{r}
+prop_test = function (city_name) {
+    prop.test(
+  x = homicide_city$unsolved[homicide_city$city_state == city_name ],
+  n = homicide_city$sum[homicide_city$city_state == city_name ]
+  ) |>
+    broom::tidy()
+}
+
+purrr::map_df(pull(homicide_city, city_state), prop_test)
 ```
